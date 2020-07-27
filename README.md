@@ -10,7 +10,7 @@ To set up the use of several buildpacks from the Dokku CLI use `buildpacks:add`:
 
 ```
 dokku buildpacks:clear
-dokku buildpacks:add https://github.com/moneymeets/python-poetry-buildpack.git
+dokku buildpacks:add https://github.com/intellineers/python-poetry-buildpack.git
 dokku buildpacks:add https://github.com/heroku/heroku-buildpack-python.git
 ```
 
