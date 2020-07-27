@@ -21,4 +21,4 @@ dokku config:set app-name PYPI_EXTRA_INDEX_URL=https://username:password@pypi.st
 
 ## Acknowledgement
 
-This work is based on the previously proposed python poetry builpacks. It simply extends the possibility to add --extra-index-url upon requirement.txt file generation
+This work is based on the previously proposed [python poetry builpacks](https://github.com/moneymeets/python-poetry-buildpack). It simply extends the possibility to add --extra-index-url upon requirement.txt file generation
