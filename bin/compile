@@ -32,7 +32,7 @@ if [ -z "${PYPI_EXTRA_INDEX_URL+x}" ]; then
   echo "PYPI_EXTRA_INDEX_URL not found, pass"
 else
   echo "PYPI_EXTRA_INDEX_URL found, appending --extra-index-url $PYPI_EXTRA_INDEX_URL to requirements.txt"
-  sed -i "s/--extra-index-url.*/--extra-index-url=$PYPI_EXTRA_INDEX_URL/g" requirements.txt
+  sed -i "s|--extra-index-url.*|--extra-index-url $PYPI_EXTRA_INDEX_URL|g" requirements.txt
 fi
 
 RUNTIME_FILE="runtime.txt"
