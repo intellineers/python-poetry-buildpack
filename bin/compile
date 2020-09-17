@@ -18,22 +18,17 @@ curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poet
 
 source $HOME/.poetry/env
 
-echo "-----> Export requirements.txt from Poetry"
-
 cd "$BUILD_DIR"
 
-# pip can't handle editable dependencies when requiring hashes (https://github.com/pypa/pip/issues/4995)
-poetry export -f requirements.txt -o requirements.txt --without-hashes
+echo "-----> Setting Private repository"
+poetry config repositories.stainly $STAINLY_PYPI_URL
+poetry config http-basic.stainly $STAINLY_PYPI_USERNAME $STAINLY_PYPI_PASSWORD
 
-# Add private pypi server url and credential
+echo "-----> Configure System install"
+# poetry config virtualenvs.create false
 
-
-if [ -z "${PYPI_EXTRA_INDEX_URL+x}" ]; then
-  echo "PYPI_EXTRA_INDEX_URL not found, pass"
-else
-  echo "PYPI_EXTRA_INDEX_URL found, appending --extra-index-url $PYPI_EXTRA_INDEX_URL to requirements.txt"
-  sed -i "s|--extra-index-url.*|--extra-index-url $PYPI_EXTRA_INDEX_URL|g" requirements.txt
-fi
+echo "-----> Install Dependencies"
+poetry install
 
 RUNTIME_FILE="runtime.txt"
 
