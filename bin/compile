@@ -303,6 +303,8 @@ source $HOME/.poetry/env
 
 echo "-----> Setting Private repository"
 if [[ -z $STAINLY_PYPI_USERNAME || -z $STAINLY_PYPI_PASSWORD || -z $STAINLY_PYPI_URL ]]; then
+  echo "Can't find private repository configuration"
+else
   poetry config repositories.stainly $STAINLY_PYPI_URL
   poetry config http-basic.stainly $STAINLY_PYPI_USERNAME $STAINLY_PYPI_PASSWORD
 fi
