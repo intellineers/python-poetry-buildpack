@@ -302,8 +302,10 @@ curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poet
 source $HOME/.poetry/env
 
 echo "-----> Setting Private repository"
-poetry config repositories.stainly $STAINLY_PYPI_URL
-poetry config http-basic.stainly $STAINLY_PYPI_USERNAME $STAINLY_PYPI_PASSWORD
+if [[ -z $STAINLY_PYPI_USERNAME || -z $STAINLY_PYPI_PASSWORD || -z $STAINLY_PYPI_URL ]]; then
+  poetry config repositories.stainly $STAINLY_PYPI_URL
+  poetry config http-basic.stainly $STAINLY_PYPI_USERNAME $STAINLY_PYPI_PASSWORD
+fi
 
 echo "-----> Configure System install"
 poetry config virtualenvs.create false
