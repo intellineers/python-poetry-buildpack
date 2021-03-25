@@ -313,7 +313,7 @@ echo "-----> Configure System install"
 poetry config virtualenvs.create false
 
 echo "-----> Install Dependencies"
-poetry install
+poetry install --no-dev
 
 # Django collectstatic support.
 # The buildpack automatically runs collectstatic for Django applications.
