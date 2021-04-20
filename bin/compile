@@ -312,12 +312,12 @@ fi
 echo "-----> Configure System install"
 poetry config virtualenvs.create false
 
-if [[ -z $POETRY_WITH_DEV ]]; then
-  echo "-----> Install Dependencies with dev dependencies"
-  poetry install
-else
+if [ -z ${POETRY_WITH_DEV+x} ]; then
   echo "-----> Install Dependencies without dev dependencies"
   poetry install --no-dev
+else
+  echo "-----> Install Dependencies with dev dependencies"
+  poetry install 
 fi
 
 
