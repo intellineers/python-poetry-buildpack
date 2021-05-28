@@ -5,17 +5,23 @@ runtime-fixer runtime.txt
 PYTHON_VERSION=$(cat runtime.txt)
 
 # The location of the pre-compiled python binary.
-VENDORED_PYTHON="${VENDOR_URL}/runtimes/$PYTHON_VERSION.tar.gz"
+VENDORED_PYTHON="${S3_BASE_URL}/${STACK}/runtimes/${PYTHON_VERSION}.tar.gz"
 
 SECURITY_UPDATE="Python has released a security update! Please consider upgrading to"
 SECURITY_UPDATE_PYPY="The PyPy project has released a security update! Please consider upgrading to"
 
 ONLY_SUPPORTED_2_VERSION="Only the latest version of Python 2 is supported on the platform. Please consider upgrading to"
 
-PYTHON_2_EOL_UPDATE="Python 2 has reached it's community EOL. Upgrade your Python runtime to maintain a secure application as soon as possible."
+PYTHON_2_EOL_UPDATE="Python 2 has reached its community EOL. Upgrade your Python runtime to maintain a secure application as soon as possible."
 
 # check if runtime exists
 if curl --output /dev/null --silent --head --fail "$VENDORED_PYTHON"; then
+  if [[ "$PYTHON_VERSION" == $PY39* ]]; then
+    if [ "$PYTHON_VERSION" != "$LATEST_39" ]; then
+      puts-warn "$SECURITY_UPDATE" "$LATEST_39"
+      echo "       Learn More: https://devcenter.heroku.com/articles/python-runtimes"
+    fi
+  fi
   if [[ "$PYTHON_VERSION" == $PY38* ]]; then
     # do things to alert the user of security release available
     if [ "$PYTHON_VERSION" != "$LATEST_38" ]; then
@@ -84,13 +90,13 @@ mcount "version.python.${PYTHON_VERSION}"
 
 if [[ "$STACK" != "$CACHED_PYTHON_STACK" ]]; then
     puts-step "Stack has changed from $CACHED_PYTHON_STACK to $STACK, clearing cache"
-    rm -fr .heroku/python-stack .heroku/python-version .heroku/python .heroku/vendor .heroku/python .heroku/python-sqlite3-version
+    rm -rf .heroku/python-stack .heroku/python-version .heroku/python .heroku/vendor .heroku/python .heroku/python-sqlite3-version
 fi
 
 if [ -f .heroku/python-version ]; then
   if [ ! "$(cat .heroku/python-version)" = "$PYTHON_VERSION" ]; then
-      puts-step "Found $(cat .heroku/python-version), removing"
-      rm -fr .heroku/python
+      puts-step "Python version has changed from $(cat .heroku/python-version) to ${PYTHON_VERSION}, clearing cache"
+      rm -rf .heroku/python
   else
     SKIP_INSTALL=1
   fi
@@ -115,17 +121,19 @@ else
   fi
 fi
 
-if [ ! "$SKIP_INSTALL" ]; then
-    puts-step "Installing $PYTHON_VERSION"
+if [[ -n "${SKIP_INSTALL}" ]]; then
+  puts-step "Using cached install of ${PYTHON_VERSION}"
+else
+  puts-step "Installing ${PYTHON_VERSION}"
 
-    # Prepare destination directory.
-    mkdir -p .heroku/python
+  # Prepare destination directory.
+  mkdir -p .heroku/python
 
-    if ! curl "${VENDORED_PYTHON}" -s | tar zxv -C .heroku/python &> /dev/null; then
-      puts-warn "Requested runtime ($PYTHON_VERSION) is not available for this stack ($STACK)."
-      puts-warn "Aborting.  More info: https://devcenter.heroku.com/articles/python-support"
-      exit 1
-    fi
+  if ! curl "${VENDORED_PYTHON}" -s | tar zxv -C .heroku/python &> /dev/null; then
+    puts-warn "Requested runtime ($PYTHON_VERSION) is not available for this stack ($STACK)."
+    puts-warn "Aborting.  More info: https://devcenter.heroku.com/articles/python-support"
+    exit 1
+  fi
 
   # Record for future reference.
   echo "$PYTHON_VERSION" > .heroku/python-version
@@ -136,11 +144,11 @@ fi
 
 set -e
 
-PIP_VERSION='20.1.1'
+PIP_VERSION='20.2.4'
 # Must use setuptools <47.2.0 until we fix:
 # https://github.com/heroku/heroku-buildpack-python/issues/1006
 SETUPTOOLS_VERSION='47.1.1'
-WHEEL_VERSION='0.34.2'
+WHEEL_VERSION='0.36.2'
 
 if [[ "${PYTHON_VERSION}" == ${PY34}* ]]; then
   # Python 3.4 support was dropped in pip 19.2+, setuptools 44+ and wheel 0.34+.
@@ -152,6 +160,8 @@ elif [[ "${PYTHON_VERSION}" == ${PY27}* || "${PYTHON_VERSION}" == ${PYPY27}* ]];
   SETUPTOOLS_VERSION='44.1.1'
 fi
 
+puts-step "Installing pip ${PIP_VERSION}, setuptools ${SETUPTOOLS_VERSION} and wheel ${WHEEL_VERSION}"
+
 # We don't use get-pip.py, since:
 #  - it uses `--force-reinstall`, which is unnecessary here and slows down repeat builds
 #  - it means downloading pip twice (once embedded in get-pip.py, and again during
@@ -160,7 +170,7 @@ fi
 # Instead, we use the pip wheel to install itself, using the method described here:
 # https://github.com/pypa/pip/issues/2351#issuecomment-69994524
 PIP_WHEEL_FILENAME="pip-${PIP_VERSION}-py2.py3-none-any.whl"
-PIP_WHEEL_URL="https://lang-python.s3.amazonaws.com/common/${PIP_WHEEL_FILENAME}"
+PIP_WHEEL_URL="${S3_BASE_URL}/common/${PIP_WHEEL_FILENAME}"
 PIP_WHEEL="${TMPDIR:-/tmp}/${PIP_WHEEL_FILENAME}"
 
 if ! curl -sSf "${PIP_WHEEL_URL}" -o "$PIP_WHEEL"; then
@@ -169,19 +179,7 @@ if ! curl -sSf "${PIP_WHEEL_URL}" -o "$PIP_WHEEL"; then
   exit 1
 fi
 
-if [[ -f "$BUILD_DIR/Pipfile" ]]; then
-  # The buildpack is pinned to old pipenv, which requires older pip.
-  # Pip 9.0.2 doesn't support installing itself from a wheel, so we have to use split
-  # versions here (ie: installer pip version different from target pip version).
-  PIP_VERSION='9.0.2'
-  PIP_TO_INSTALL="pip==${PIP_VERSION}"
-else
-  PIP_TO_INSTALL="${PIP_WHEEL}"
-fi
-
-puts-step "Installing pip ${PIP_VERSION}, setuptools ${SETUPTOOLS_VERSION} and wheel ${WHEEL_VERSION}"
-
 /app/.heroku/python/bin/python "${PIP_WHEEL}/pip" install --quiet --disable-pip-version-check --no-cache \
-  "${PIP_TO_INSTALL}" "setuptools==${SETUPTOOLS_VERSION}" "wheel==${WHEEL_VERSION}"
+  "${PIP_WHEEL}" "setuptools==${SETUPTOOLS_VERSION}" "wheel==${WHEEL_VERSION}"
 
 hash -r
