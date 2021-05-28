@@ -15,8 +15,10 @@
 # Fail fast and fail hard.
 set -eo pipefail
 
-# Used by buildpack-stdlib's metrics features.
-export BPLOG_PREFIX="buildpack.python"
+# Boostrap the Buildpack Standard Library.
+# Disable unused env var warning since shellcheck doesn't know about the stdlib.
+# shellcheck disable=2034
+BPLOG_PREFIX="buildpack.python"
 export BUILDPACK_LOG_FILE=${BUILDPACK_LOG_FILE:-/dev/null}
 
 [ "$BUILDPACK_XTRACE" ] && set -o xtrace
@@ -35,12 +37,11 @@ ENV_DIR=$3
 # Export Path variables, for use in sub-scripts.
 export BUILD_DIR CACHE_DIR ENV_DIR
 
-# Set the base URL for downloading buildpack assets like Python runtimes.
-# The user can provide BUILDPACK_S3_BASE_URL to specify a custom target.
+# Set the Buildpack's internet target for downloading Python distributions.
+# The user can provide BUILDPACK_VENDOR_URL to specify a custom target.
 # Note: this is designed for non-Heroku use, as it does not use the user-provided
 # environment variable mechanism (the ENV_DIR).
 S3_BASE_URL="${BUILDPACK_S3_BASE_URL:-"https://heroku-buildpack-python.s3.amazonaws.com"}"
-# This has to be exported since it's used by the geo-libs step which is run in a subshell.
 
 # Default Python Versions
 # shellcheck source=bin/default_pythons
@@ -58,7 +59,6 @@ PYPY27="pypy2.7"
 PYPY36="pypy3.6"
 
 # Which stack is used (for binary downloading), if none is provided (e.g. outside of Heroku)?
-# TODO: Remove this and require that STACK be set explicitly.
 DEFAULT_PYTHON_STACK="heroku-18"
 
 # Common Problem Warnings:
@@ -68,18 +68,24 @@ DEFAULT_PYTHON_STACK="heroku-18"
 WARNINGS_LOG=$(mktemp)
 RECOMMENDED_PYTHON_VERSION=$DEFAULT_PYTHON_VERSION
 
-# The buildpack ships with a few executable tools.
+# The buildpack ships with a few executable tools (e.g. pip-grep, etc).
 # This installs them into the path, so we can execute them directly.
-export PATH=$PATH:$ROOT_DIR/vendor/
+export PATH=$PATH:$ROOT_DIR/vendor/:$ROOT_DIR/vendor/pip-pop
 
 # Set environment variables if they weren't set by the platform.
+# Note: this is legacy, for a deprecated build system known as Anvil.
+# This can likely be removed, with caution.
+[ ! "$SLUG_ID" ] && SLUG_ID="defaultslug"
+[ ! "$REQUEST_ID" ] && REQUEST_ID=$SLUG_ID
 [ ! "$STACK" ] && STACK=$DEFAULT_PYTHON_STACK
 
 # Sanitize externally-provided environment variables:
 # The following environment variables are either problematic or simply unneccessary
 # for the buildpack to have knowledge of, so we unset them, to keep the environment
 # as clean and pristine as possible.
-unset PYTHONHOME PYTHONPATH
+unset GIT_DIR PYTHONHOME PYTHONPATH
+unset RECEIVE_DATA RUN_KEY BUILD_INFO DEPLOY LOG_TOKEN
+unset CYTOKINE_LOG_FILE GEM_PATH
 
 # Import the utils script, which contains helper functions used throughout the buildpack.
 # shellcheck source=bin/utils
@@ -118,9 +124,8 @@ export PYTHONUNBUFFERED=1
 # Set the locale to a well-known and expected standard.
 export LANG=en_US.UTF-8
 # `~/.heroku/vendor` is an place where the buildpack may stick pre-build binaries for known
-# C dependencies. This section configures Python (GCC, more specifically)
+# C dependencies (e.g. libmemcached on cedar-14). This section configures Python (GCC, more specifically)
 # and pip to automatically include these paths when building binaries.
-# TODO: Stop adding .heroku/vendor here now that the buildpack no longer vendors anything.
 export C_INCLUDE_PATH=/app/.heroku/vendor/include:/app/.heroku/python/include:$C_INCLUDE_PATH
 export CPLUS_INCLUDE_PATH=/app/.heroku/vendor/include:/app/.heroku/python/include:$CPLUS_INCLUDE_PATH
 export LIBRARY_PATH=/app/.heroku/vendor/lib:/app/.heroku/python/lib:$LIBRARY_PATH
@@ -160,6 +165,8 @@ cp -R "$CACHE_DIR/.heroku/python-stack" .heroku/ &> /dev/null || true
 cp -R "$CACHE_DIR/.heroku/python-version" .heroku/ &> /dev/null || true
 # A plain text file which contains the current sqlite3 version being used (used for cache busting).
 cp -R "$CACHE_DIR/.heroku/python-sqlite3-version" .heroku/ &> /dev/null || true
+# Any pre-compiled binaries, provided by the buildpack.
+cp -R "$CACHE_DIR/.heroku/vendor" .heroku/ &> /dev/null || true
 # "editable" installations of code repositories, via pip or pipenv.
 if [[ -d "$CACHE_DIR/.heroku/src" ]]; then
   cp -R "$CACHE_DIR/.heroku/src" .heroku/ &> /dev/null || true
@@ -177,7 +184,7 @@ source "$BIN_DIR/steps/hooks/pre_compile"
 # continue to use that version of Python in perpituity (warnings will be raised if
 # they are out–of–date).
 if [ -f "$CACHE_DIR/.heroku/python-version" ]; then
-  CACHED_PYTHON_VERSION=$(cat "$CACHE_DIR/.heroku/python-version")
+  DEFAULT_PYTHON_VERSION=$(cat "$CACHE_DIR/.heroku/python-version")
 fi
 
 # We didn't always record the stack version. This code is in place because of that.
@@ -218,7 +225,6 @@ mkdir -p "$(dirname "$PROFILE_PATH")"
 # Create the directory for editable source code installation, if it doesn't exist.
 mkdir -p /app/.heroku/src
 
-
 # On Heroku CI, builds happen in `/app`. Otherwise, on the Heroku platform,
 # they occur in a temp directory. Beacuse Python is not portable, we must create
 # symlinks to emulate that we are operating in `/app` during the build process.
@@ -230,6 +236,7 @@ if [[ $BUILD_DIR != '/app' ]]; then
     ln -nsf "$BUILD_DIR/.heroku/vendor" /app/.heroku/vendor
     # Note: .heroku/src is copied in later.
 fi
+
 
 
 # Download / Install Python, from pre-build binaries available on Amazon S3.
