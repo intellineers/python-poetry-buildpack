@@ -61,7 +61,7 @@ PYPY36="pypy3.6"
 
 # Which stack is used (for binary downloading), if none is provided (e.g. outside of Heroku)?
 # TODO: Remove this and require that STACK be set explicitly.
-DEFAULT_PYTHON_STACK="heroku-18"
+DEFAULT_PYTHON_STACK="heroku-20"
 
 # Common Problem Warnings:
 # This section creates a temporary file in which to stick the output of `pip install`.
