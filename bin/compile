@@ -287,7 +287,7 @@ mtime "sqlite3.install.time" "${start}"
 # -----------
 
 echo "-----> Install Poetry"
-curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/get-poetry.py | python - --version $POETRY_VERSION
+curl -sSL https://install.python-poetry.org | python3 | indent
 
 source $HOME/.poetry/env
 
